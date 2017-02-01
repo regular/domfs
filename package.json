@@ -1,0 +1,26 @@
+{
+  "name": "domfs",
+  "version": "1.0.0",
+  "description": "A FUSE-based filesystem that exposes a browser's DOM tree as a file tree",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "fuse",
+    "dom",
+    "mad science",
+    "fs",
+    "filesystem"
+  ],
+  "author": "Jan Bölsche <jan@lagomorph.de> (http://regular.codes)",
+  "license": "MIT",
+  "dependencies": {
+    "fuse-bindings": "^2.10.1",
+    "shoe": "0.0.15",
+    "split": "^1.0.0"
+  },
+  "devDependencies": {
+    "browserify": "^14.0.0"
+  }
+}

@@ -4,7 +4,8 @@
   "description": "A FUSE-based filesystem that exposes a browser's DOM tree as a file tree",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
   },
   "keywords": [
     "fuse",
@@ -22,5 +23,13 @@
   },
   "devDependencies": {
     "browserify": "^14.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/regular/domfs.git"
+  },
+  "bugs": {
+    "url": "https://github.com/regular/domfs/issues"
+  },
+  "homepage": "https://github.com/regular/domfs#readme"
 }

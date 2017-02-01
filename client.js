@@ -1,37 +1,175 @@
-//jshint esversion: 6
+//jshint esversion: 6, -W083
 const shoe = require('shoe');
 const split = require('split');
 
-function pathToElement(filepath) {
-    if (filepath === '/') return document;
-    const selector = filepath.replace('/', ' ');
+const specialFiles = '.html .attrs';
+
+let fds = {};
+
+function parseSimpleSelector(selector) {
+    let m = selector.match(/(\w+)(#\w+)?((?:\.\w+)*)(:nth-child\((\d+)\))?/);
+    if (!m) throw new Error(`Malformed selector: ${selector}`);
+    let [_1, tagName, id, classes, _2, pos] = m;
+    id = id ? id.slice(1) : undefined;
+    classes = classes ? classes.slice(1).split('.') : undefined;
+    pos = pos ? parseInt(pos) : undefined;
+    return {tagName, id, classes, pos};
+}
+
+// returns selectos that are more or equal specific than
+// the one provided as `needle`
+// This is used to check for ambiguity
+function findMatches(needle, haystack) {
+    let result = [];
+    let n  = parseSimpleSelector(needle);
+    let i=-1;
+    haystack.forEach( (hs)=>{
+        i++;
+        let h = parseSimpleSelector(hs);
+
+        // if a tag is specified, it must match
+        if (n.tagName && n.tagName !== h.tagName) return;
+
+        // if an id is specified, it must match
+        if (n.id && n.id !== h.id) return;
+
+        // if a position is specified, it must match
+        if (typeof n.pos !== 'undefined' && n.pos != h.pos) return;
+
+        // all specified classes must exist
+        let isMatch = true;
+        (n.classes || []).forEach( (c)=> {
+            console.log(h);
+            if (!h.classes || !h.classes.includes(c)) isMatch = false;
+        });
+
+        if (isMatch) result.push(i);
+    });
+    return result;
+}
+
+function elementAtPath(filepath) {
+    if (filepath === '/') return document.html;
+    if (filepath[0] !== '/') throw new Error('filepath must be absolute');
+    filepath = filepath.slice(1);
+
+    let segments = filepath.split('/');
+    segments.unshift(':root');
+    
+    const selector = segments.join('>');
+    console.log('selector', selector);
     const elements = document.querySelectorAll(selector);
     if (elements.length>1) throw new Error(`Selector is ambiguous: ${selector}`);
     return elements[0];
 }
 
-function elementsToFilenames(elements) {
+function createUniqueNamesForElements(elements) {
+    // first we try to create unqiue names using tagName, id and class
     let result = [];
     for(let i=0; i<elements.length; ++i) {
         let el = elements[i];
-        result.push(`${((s)=>s.toLowerCase())(el.tagName||'')}:nth-child(${i++})`);
+        let tagName = (el.tagName||'').toLowerCase();
+
+        let selector = tagName;
+        let id = el.id;
+        if (id) selector += `#${id}`;
+
+        let classes = el.getAttribute('class');
+        if (classes) {
+            classes = [''].concat(classes.split(' ')).join('.');
+            selector += classes;
+        }
+        result.push(selector);
+    }
+
+    // collect indices of non-unique selectors
+    let nonUnique = {};
+    for(let i=0; i<result.length; ++i) {
+        for(let j=0; j<result.length; ++j) {
+            if ( (result[i] == result[j]) && (i !== j) ) {
+                nonUnique[i] = nonUnique[j] = true;
+            }
+        }
+    }
+
+    // find selectors that are less specific than other selectors
+    // already in the set.
+    for(let i=0; i<result.length; ++i) {
+        let matches = findMatches(result[i], result);
+        if (matches.length>1) {
+            nonUnique[i] = true;
+        } else {
+            if (matches.length === 0) throw new Error('What?');
+            if (matches[0] !== i) throw new Error('Something is wrong');
+        }
+    }
+    
+
+    // force unqiqueness by including
+    // the child's position among its peers
+    for (let i in nonUnique) {
+        i = parseInt(i);
+        result[i] = `${result[i]}:nth-child(${i+1})`;
+    } 
+    return result;
+}
+
+module.exports = {
+    parseSimpleSelector,
+    findMatches,
+    elementAtPath,
+    createUniqueNamesForElements
+};
+
+
+function getAttributeNames(el) {
+    let len = el.attributes.length;
+    let result = [];
+    for(let i=0; i<len; ++i) {
+        let name = el.attributes[i].name;
+        result.push(name);
     }
     return result;
 }
 
-function ls(filepath) {
-    const parent = pathToElement(filepath);
-    console.log('parent is', parent);
-    const elements = parent.children;
-    return elementsToFilenames(elements);
+function parsePath(filepath) {
+    // if the last segemtns is .html or .attrs, they get special
+    // treatment.
+    let specials = specialFiles.split(' ');
+    let segments = filepath.split('/');
+    let special;
+    if (specials.includes(segments[segments.length-1])) {
+        special = segments.pop();
+        console.log('segments', segments);
+        filepath = segments.join('/');
+    }
+    return {special, filepath};
 }
 
-let stream = shoe('/domfs');
-stream.pipe(split()).on('data', (line)=> {
-    console.log(line);
-    if (line.slice(0,3) === 'ls ') {
-        const filenames = ls(line.slice(3));
-        filenames.forEach( (fn)=> stream.write(`${fn}\n`) );
-        stream.write('\n');
+function readdir(path) {
+    let {special, filepath} = parsePath(path);
+    const parent = elementAtPath(filepath);
+    console.log('parent is', parent);
+    switch(special) {
+        case '.attrs':
+            return getAttributeNames(parent);
+        case '.html':
+            throw new Error("readdir of .html (it's a file");
+        default:
+            let result = specialFiles.split(' ');
+            result = result.concat(createUniqueNamesForElements(parent.children));
+            return result;
     }
-});
+}
+
+function main() {
+    let stream = shoe('/domfs');
+    stream.pipe(split()).on('data', (line)=> {
+        console.log(line);
+        if (line.slice(0,8) === 'readdir ') {
+            const filenames = readdir(line.slice(8));
+            filenames.forEach( (fn)=> stream.write(`${fn}\n`) );
+            stream.write('\n');
+        }
+    });
+}

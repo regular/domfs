@@ -22,7 +22,9 @@
     "split": "^1.0.0"
   },
   "devDependencies": {
-    "browserify": "^14.0.0"
+    "browserify": "^14.0.0",
+    "tap-browser-el": "^2.0.0",
+    "tape": "^4.6.3"
   },
   "repository": {
     "type": "git",

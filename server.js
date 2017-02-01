@@ -12,7 +12,7 @@ let sock = shoe((stream) => {
     stream.pipe(split(), {end: false}).on('data', (line)=>{
         console.log(`>> ${line}`);
     });
-    stream.write('ls /\n');
+    stream.write('readdir /body/div:nth-child(1)/.attrs\n');
 });
 
 sock.install(server, '/domfs');

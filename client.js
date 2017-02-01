@@ -5,6 +5,7 @@ const split = require('split');
 const specialFiles = '.html .attrs';
 
 let fds = {};
+let fd = 0;
 
 function parseSimpleSelector(selector) {
     let m = selector.match(/(\w+)(#\w+)?((?:\.\w+)*)(:nth-child\((\d+)\))?/);
@@ -104,7 +105,6 @@ function createUniqueNamesForElements(elements) {
         }
     }
     
-
     // force unqiqueness by including
     // the child's position among its peers
     for (let i in nonUnique) {
@@ -113,14 +113,6 @@ function createUniqueNamesForElements(elements) {
     } 
     return result;
 }
-
-module.exports = {
-    parseSimpleSelector,
-    findMatches,
-    elementAtPath,
-    createUniqueNamesForElements
-};
-
 
 function getAttributeNames(el) {
     let len = el.attributes.length;
@@ -137,39 +129,103 @@ function parsePath(filepath) {
     // treatment.
     let specials = specialFiles.split(' ');
     let segments = filepath.split('/');
-    let special;
+    let special, extra;
+
+    // the last or secind-to-last segment ,ight be a special
     if (specials.includes(segments[segments.length-1])) {
         special = segments.pop();
-        console.log('segments', segments);
+        filepath = segments.join('/');
+    } else if (specials.includes(segments[segments.length-2])) {
+        extra = segments.pop();
+        special = segments.pop();
         filepath = segments.join('/');
     }
-    return {special, filepath};
+    return {special, extra, filepath};
 }
 
 function readdir(path) {
     let {special, filepath} = parsePath(path);
     const parent = elementAtPath(filepath);
-    console.log('parent is', parent);
+    let result;
     switch(special) {
         case '.attrs':
-            return getAttributeNames(parent);
+            result = getAttributeNames(parent);
+            break;
         case '.html':
             throw new Error("readdir of .html (it's a file");
         default:
-            let result = specialFiles.split(' ');
+            // for a normal node, we add the special
+            // directory entries.
+            result = specialFiles.split(' ');
             result = result.concat(createUniqueNamesForElements(parent.children));
-            return result;
     }
+    return JSON.stringify(result);
 }
 
-function main() {
+function open(path) {
+    let {special, filepath, extra} = parsePath(path);
+    const element = elementAtPath(filepath);
+    console.log(element, special, extra);
+    if (special === '.html') {
+        fds[++fd] = {special, element};
+        return fd;
+    } else if (special == '.attrs' && extra) {
+        if (element.getAttribute(extra) !== null) {
+            fds[++fd] = {special, element, attrName: extra};
+            return fd;
+        }
+    }
+    return -1;
+}
+
+function read(args) {
+    let [fd, length, pos] = args.split(' ').map(Math.floor);
+    console.log('read', fd, length, pos);
+    if (typeof fds[fd] === 'undefined') {
+        console.log('read: file not open');
+        return -1;
+    }
+    let data;
+    let {element, special, attrName} = fds[fd];
+    if (special == '.attrs') {
+        data = element.getAttribute(attrName);
+    } else if (special == '.html') {
+        data = element.innerHTML;
+    }
+    console.log('data', data);
+    return data.slice(pos, pos + length);
+}
+
+const ops = {readdir, open, read};
+
+function run() {
     let stream = shoe('/domfs');
     stream.pipe(split()).on('data', (line)=> {
         console.log(line);
-        if (line.slice(0,8) === 'readdir ') {
-            const filenames = readdir(line.slice(8));
-            filenames.forEach( (fn)=> stream.write(`${fn}\n`) );
-            stream.write('\n');
+        let idx = line.indexOf(' ');
+        if (idx !== -1) {
+            let command = line.slice(0, idx);
+            let args = line.slice(idx+1);
+            let op = ops[command];
+            if (op) {
+                let result = op(args);
+                stream.write(`${result}\n`);
+            } else {
+                console.log(`Unknown command: ${command}`);
+            }
         }
     });
 }
+
+module.exports = {
+    parseSimpleSelector,
+    findMatches,
+    elementAtPath,
+    createUniqueNamesForElements,
+    getAttributeNames,
+    parsePath,
+    readdir,
+    run
+};
+
+run();

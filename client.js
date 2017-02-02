@@ -1,6 +1,7 @@
 //jshint esversion: 6, -W083
 const shoe = require('shoe');
 const split = require('split');
+const dnode = require('dnode');
 
 const specialFiles = '.html .attrs';
 
@@ -143,7 +144,11 @@ function parsePath(filepath) {
     return {special, extra, filepath};
 }
 
-function readdir(path) {
+//
+// -- File Operations --
+//
+
+function readdir(path, cb) {
     let {special, filepath} = parsePath(path);
     const parent = elementAtPath(filepath);
     let result;
@@ -152,38 +157,37 @@ function readdir(path) {
             result = getAttributeNames(parent);
             break;
         case '.html':
-            throw new Error("readdir of .html (it's a file");
+            return cb(new Error("readdir of .html (it's a file"));
         default:
             // for a normal node, we add the special
             // directory entries.
             result = specialFiles.split(' ');
             result = result.concat(createUniqueNamesForElements(parent.children));
     }
-    return JSON.stringify(result);
+    return cb(JSON.stringify(result));
 }
 
-function open(path) {
+function open(path, cb) {
     let {special, filepath, extra} = parsePath(path);
     const element = elementAtPath(filepath);
     console.log(element, special, extra);
     if (special === '.html') {
         fds[++fd] = {special, element};
-        return fd;
+        return cb(fd);
     } else if (special == '.attrs' && extra) {
         if (element.getAttribute(extra) !== null) {
             fds[++fd] = {special, element, attrName: extra};
-            return fd;
+            return cb(fd);
         }
     }
-    return -1;
+    return cb(-1);
 }
 
-function read(args) {
-    let [fd, length, pos] = args.split(' ').map(Math.floor);
+function read(fd, length, pos, cb) {
     console.log('read', fd, length, pos);
     if (typeof fds[fd] === 'undefined') {
         console.log('read: file not open');
-        return -1;
+        return cb(-1);
     }
     let data;
     let {element, special, attrName} = fds[fd];
@@ -193,28 +197,15 @@ function read(args) {
         data = element.innerHTML;
     }
     console.log('data', data);
-    return data.slice(pos, pos + length);
+    data = data.slice(pos, pos + length);
+    return cb(data);
 }
 
 const ops = {readdir, open, read};
 
 function run() {
     let stream = shoe('/domfs');
-    stream.pipe(split()).on('data', (line)=> {
-        console.log(line);
-        let idx = line.indexOf(' ');
-        if (idx !== -1) {
-            let command = line.slice(0, idx);
-            let args = line.slice(idx+1);
-            let op = ops[command];
-            if (op) {
-                let result = op(args);
-                stream.write(`${result}\n`);
-            } else {
-                console.log(`Unknown command: ${command}`);
-            }
-        }
-    });
+    stream.pipe(dnode(ops)).pipe(stream);
 }
 
 module.exports = {

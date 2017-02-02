@@ -1,7 +1,7 @@
 {
   "name": "domfs",
   "version": "1.0.0",
-  "description": "A FUSE-based filesystem that exposes a browser's DOM tree as a file tree",
+  "description": "A FUSE-based filesystem that exposes a browser's DOM tree as a file tree - finally *mount* your browser!",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
@@ -18,9 +18,10 @@
   "license": "MIT",
   "dependencies": {
     "dnode": "^1.2.2",
+    "ecstatic": "^2.1.0",
     "fuse-bindings": "^2.10.1",
     "shoe": "0.0.15",
-    "split": "^1.0.0"
+    "xtend": "^4.0.1"
   },
   "devDependencies": {
     "browserify": "^14.0.0",

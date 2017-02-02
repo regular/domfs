@@ -1,7 +1,7 @@
 //jshint esversion: 6, -W083
 const shoe = require('shoe');
-const split = require('split');
 const dnode = require('dnode');
+const E = require('./fuse-errors');
 
 const specialFiles = '.html .attrs';
 
@@ -51,7 +51,7 @@ function findMatches(needle, haystack) {
 }
 
 function elementAtPath(filepath) {
-    if (filepath === '/') return document.html;
+    if (filepath == '/') return document.querySelector('html');
     if (filepath[0] !== '/') throw new Error('filepath must be absolute');
     filepath = filepath.slice(1);
 
@@ -60,8 +60,20 @@ function elementAtPath(filepath) {
     
     const selector = segments.join('>');
     console.log('selector', selector);
-    const elements = document.querySelectorAll(selector);
-    if (elements.length>1) throw new Error(`Selector is ambiguous: ${selector}`);
+    let elements;
+    try {
+        elements  = document.querySelectorAll(selector);
+    } catch(e) {}
+
+    if (elements === undefined) {
+        console.log(`nothing matches selector: ${selector}`);
+        return undefined;
+    }
+
+    if (elements.length>1) {
+        console.log(`Selector is ambiguous: ${selector}`);
+        return undefined;
+    }
     return elements[0];
 }
 
@@ -126,13 +138,16 @@ function getAttributeNames(el) {
 }
 
 function parsePath(filepath) {
+    if (filepath[0] !== '/') {
+        console.log('parsePath: not an absolute path');
+    }
     // if the last segemtns is .html or .attrs, they get special
     // treatment.
     let specials = specialFiles.split(' ');
     let segments = filepath.split('/');
     let special, extra;
 
-    // the last or secind-to-last segment ,ight be a special
+    // the last or second-to-last segment might be a special
     if (specials.includes(segments[segments.length-1])) {
         special = segments.pop();
         filepath = segments.join('/');
@@ -141,6 +156,9 @@ function parsePath(filepath) {
         special = segments.pop();
         filepath = segments.join('/');
     }
+    // joining an array with length 1 results in no separator,
+    // thus '' must be converted to '/'
+    if (filepath === '') filepath ='/';
     return {special, extra, filepath};
 }
 
@@ -149,49 +167,101 @@ function parsePath(filepath) {
 //
 
 function readdir(path, cb) {
-    let {special, filepath} = parsePath(path);
+    console.log('readdir', path);
+    let {special, filepath, extra} = parsePath(path);
     const parent = elementAtPath(filepath);
     let result;
     switch(special) {
         case '.attrs':
+            if (extra) return cb(E.ENOTDIR);
             result = getAttributeNames(parent);
             break;
         case '.html':
-            return cb(new Error("readdir of .html (it's a file"));
+            return cb(E.ENOTDIR);
         default:
             // for a normal node, we add the special
             // directory entries.
+            if (typeof parent == 'undefined') return cb(E.ENOENT);
             result = specialFiles.split(' ');
             result = result.concat(createUniqueNamesForElements(parent.children));
     }
-    return cb(null, JSON.stringify(result));
+    return cb(null, result);
 }
 
-function open(path, cb) {
+function release(path, fd, cb) {
+    console.log('release', path, fd);
+    delete fds[fd];
+    return cb(null);
+}
+
+function getattr(path, cb) {
+    console.log(`getattr ${path}`);
     let {special, filepath, extra} = parsePath(path);
+    console.log(special, filepath, extra);
     const element = elementAtPath(filepath);
-    if (typeof element == 'undefined') return cb(-1);
-    console.log(element, special, extra);
+    console.log(element);
+    if (typeof element == 'undefined') return cb(E.ENOENT);
+    let isDir = false;
+    let size = 0;
+    if (special == '.html') {
+        isDir = false;
+        size = element.innerHTML.length;
+    } else if (special == '.attrs') {
+        if (extra) {
+            let value = element.getAttribute(extra);
+            if (value === null) return cb(E.ENOENT);
+            size = value.length;
+            isDir = false;
+        } else {
+            size = 100; //TODO
+            isDir = true; 
+        }
+    } else { // so we are an element
+        size = 100; //TODO
+        isDir = true; 
+    }
+
+    cb(null, {
+        mtime: new Date(),
+        atime: new Date(),
+        ctime: new Date(),
+        size,
+        mode: isDir ? 16877 : 33188, // TODO
+        uid: 1000,
+        gid: 1000
+    });
+}
+
+function open(path, flags, cb) {
+    console.log('open', path, flags);
+    let {special, filepath, extra} = parsePath(path);
+    console.log(special, filepath, extra);
+    const element = elementAtPath(filepath);
+    console.log(element);
+    if (typeof element == 'undefined') return cb(E.ENOENT);
     if (special === '.html') {
         fds[++fd] = {special, element};
+        console.log('new fd', fd);
         return cb(null, fd);
     } else if (special == '.attrs' && extra) {
         if (element.getAttribute(extra) !== null) {
             fds[++fd] = {special, element, attrName: extra};
+            console.log('new fd', fd);
             return cb(null, fd);
         }
     }
-    return cb(-1);
+    return cb(E.EISDIR);
 }
 
 function read(fd, length, pos, cb) {
     console.log('read', fd, length, pos);
     if (typeof fds[fd] === 'undefined') {
         console.log('read: file not open');
-        return cb(-1);
+        return cb(E.EBADF);
     }
     let data;
     let {element, special, attrName} = fds[fd];
+    console.log(element, special, attrName);
     if (special == '.attrs') {
         data = element.getAttribute(attrName);
     } else if (special == '.html') {
@@ -202,7 +272,7 @@ function read(fd, length, pos, cb) {
     return cb(null, data);
 }
 
-const ops = {readdir, open, read};
+const ops = {readdir, getattr, open, read, release};
 
 function run() {
     let stream = shoe('/domfs');

@@ -3,6 +3,46 @@ const client = require('./client');
 const test = require('tape');
 const tbe = require('tap-browser-el')();
 
+test('parsePath', (t)=> {
+    t.deepEqual(client.parsePath('/.html'),{
+        filepath: '/',
+        special: '.html',
+        extra: undefined
+    }, '/.html should be: /, .html, undefined');
+
+    t.deepEqual(client.parsePath('/.attrs'),{
+        filepath: '/',
+        special: '.attrs',
+        extra: undefined
+    }, '/.attrs should be: /, .attrs, undefined');
+
+    t.deepEqual(client.parsePath('/'),{
+        filepath: '/',
+        special: undefined,
+        extra: undefined
+    }, '/ should be: /, undefined, undefined');
+
+    t.deepEqual(client.parsePath('/head'),{
+        filepath: '/head',
+        special: undefined,
+        extra: undefined
+    }, '/head should be: /head, undefined, undefined');
+
+    t.deepEqual(client.parsePath('/head/.html'),{
+        filepath: '/head',
+        special: '.html',
+        extra: undefined
+    }, '/head/.html should be: /head, .html, undefined');
+
+    t.deepEqual(client.parsePath('/head/.attrs/id'),{
+        filepath: '/head',
+        special: '.attrs',
+        extra: 'id'
+    }, '/head/.attrs/id should be: /head, .attrs, id');
+
+    t.end();
+});
+
 test('parseSimpleSelector', (t)=> {
     t.deepEqual(client.parseSimpleSelector('div'), {
         tagName: 'div',
@@ -84,8 +124,8 @@ test('findMatches', (t)=> {
 });
 
 test('elementAtPath', (t)=> {
-    t.equal(client.elementAtPath('/'), document.html, '/ should be the html element');
-    t.equal(client.elementAtPath('/body'), document.getElementsByTagName('body')[0], '/html should be the body element');
+    t.equal(client.elementAtPath('/'), document.querySelector('html'), '/ should be the html element');
+    t.equal(client.elementAtPath('/body'), document.getElementsByTagName('body')[0], '/body should be the body element');
 
     t.equal(client.elementAtPath('/head'), document.getElementsByTagName('head')[0], '/head should be the head element');
 

@@ -164,20 +164,21 @@ function readdir(path, cb) {
             result = specialFiles.split(' ');
             result = result.concat(createUniqueNamesForElements(parent.children));
     }
-    return cb(JSON.stringify(result));
+    return cb(null, JSON.stringify(result));
 }
 
 function open(path, cb) {
     let {special, filepath, extra} = parsePath(path);
     const element = elementAtPath(filepath);
+    if (typeof element == 'undefined') return cb(-1);
     console.log(element, special, extra);
     if (special === '.html') {
         fds[++fd] = {special, element};
-        return cb(fd);
+        return cb(null, fd);
     } else if (special == '.attrs' && extra) {
         if (element.getAttribute(extra) !== null) {
             fds[++fd] = {special, element, attrName: extra};
-            return cb(fd);
+            return cb(null, fd);
         }
     }
     return cb(-1);
@@ -198,7 +199,7 @@ function read(fd, length, pos, cb) {
     }
     console.log('data', data);
     data = data.slice(pos, pos + length);
-    return cb(data);
+    return cb(null, data);
 }
 
 const ops = {readdir, open, read};

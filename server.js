@@ -13,10 +13,12 @@ let sock = shoe((stream) => {
     console.log("incoming websocket connection");
     var d = dnode();
     d.on('remote', (remote) => {
-        remote.open('/body/article:nth-child(4)/.html', (fd)=> {
-            remote.read(fd, 200, 0, (data)=> {
+        remote.open('/body/article:nth-child(4)/.html', (err, fd)=> {
+            if (err) return console.log(err);
+            remote.read(fd, 200, 0, (err, data)=> {
+                if (err) return console.log(err);
                 console.log('data:' + data);
-                d.end();
+                //d.end();
             });
         });
     });

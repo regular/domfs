@@ -7,6 +7,7 @@ const dnode = require('dnode');
 const xtend = require('xtend');
 const fuse = require('fuse-bindings');
 const E = require('./fuse-errors');
+const memoizeasync = require('memoizeasync');
 
 let server = http.createServer(ecstatic);
 server.listen(9999);
@@ -21,12 +22,9 @@ let sock = shoe((stream) => {
 
             /*
             // -- from mount-url
-            write: function (path, handle, buf, len, offset, cb) { cb(E.EPERM); },
-            unlink: function (path, cb) { cb(E.EPERM); },
-            rename: function (src, dst, cb) { cb(E.EPERM); },
             mkdir: function (path, mode, cb) { cb(E.EPERM); },
             rmdir: function (path, cb) { cb(E.EPERM); },
-            create: function (path, mode, cb) { cb(E.EPERM); },
+
             getxattri: function (path, name, buffer, length, offset, cb) { cb(E.EPERM); },
             setxattr: function (path, name, buffer, length, offset, flags, cb) { cb(0); },
             destroy: function (cb) {cb();},
@@ -48,14 +46,14 @@ let sock = shoe((stream) => {
             },
             // --
             */
-            getattr: function(path, cb) {
+            getattr: /*memoizeasync(*/function(path, cb) {
                 remote.getattr(path, (err, stat) => {
                     if (err) return cb(err);
                     stat.gid = process.getgid();
                     stat.uid = process.getuid();
                     cb(null, stat);
                 });
-            },
+            }/*, {maxAge: 1000, errors: true})*/, // <-- this might cause trouble?
 
             read: function(path, fd, buf, len, pos, cb) {
                 console.log('read-wrapper', path, fd, len, pos);
@@ -65,6 +63,10 @@ let sock = shoe((stream) => {
                     buf.write(str);
                     return cb(str.length);
                 });
+            },
+            write: function(path, fd, buf, len, pos, cb) {
+                console.log('write-wrapper', path, fd, len, pos);
+                remote.write(fd, buf.toString(), len, pos, cb);
             }
         });
 

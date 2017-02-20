@@ -59,7 +59,6 @@ function elementAtPath(filepath) {
     segments.unshift(':root');
     
     const selector = segments.join('>');
-    console.log('selector', selector);
     let elements;
     try {
         elements  = document.querySelectorAll(selector);
@@ -185,13 +184,13 @@ function readdir(path, cb) {
             result = specialFiles.split(' ');
             result = result.concat(createUniqueNamesForElements(parent.children));
     }
-    return cb(null, result);
+    return cb(0, result);
 }
 
 function release(path, fd, cb) {
     console.log('release', path, fd);
     delete fds[fd];
-    return cb(null);
+    return cb(0);
 }
 
 function getattr(path, cb) {
@@ -200,12 +199,11 @@ function getattr(path, cb) {
         return cb(E.EPERM);
     }
     let {special, filepath, extra} = parsePath(path);
-    console.log(special, filepath, extra);
     const element = elementAtPath(filepath);
-    console.log(element);
     if (typeof element == 'undefined') return cb(E.ENOENT);
     let isDir = false;
     let size = 0;
+    let readonly = true;
     if (special == '.html') {
         isDir = false;
         size = element.innerHTML.length;
@@ -215,12 +213,14 @@ function getattr(path, cb) {
             if (value === null) return cb(E.ENOENT);
             size = value.length;
             isDir = false;
+            readonly = false;
         } else {
-            size = 0; //TODO
-            isDir = true; 
+            size = 0;
+            readonly = false;
+            isDir = true;
         }
     } else { // so we are an element
-        size = 0; //TODO
+        size = 0;
         isDir = true; 
     }
 
@@ -229,28 +229,93 @@ function getattr(path, cb) {
         atime: Date.now(),
         ctime: Date.now(),
         size: isDir ? 100 : size,
-        mode: isDir ? 0040555 : 0100444,
+        mode: isDir ? (readonly? 0040555 : 0040777): readonly? 0100444 : 0100666,
         uid: 0,
         gid: 0
     });
 }
 
-function open(path, flags, cb) {
-    console.log('open', path, flags);
+function write(fd, buf, length, pos, cb) {
+    function modify(data) {
+        // pad data with spaces if necessary
+        data += Array(pos + length - data.length + 1).join(' ');
+        data = data.slice(0, pos) + buf.slice(0, length) + data.slice(pos + length);
+        return data; 
+    }
+    console.log('write', fd, length, pos);
+    if (typeof fds[fd] === 'undefined') {
+        console.log('write: file not open');
+        return cb(E.EBADF);
+    }
+    let {element, special, attrName} = fds[fd];
+    let data;
+    if (special == '.attrs') {
+        data = element.getAttribute(attrName);
+        console.log('old data', data);
+        data = modify(data);
+        element.setAttribute(attrName, data);
+        console.log('new data', data);
+    } else {
+        return cb(E.EPERM); 
+    }
+    return cb(length);
+}
+
+/*
+rename: function (src, dst, cb) { cb(E.EPERM); },
+*/
+function unlink(path, cb) {
+    console.log(`unlink ${path}`);
     let {special, filepath, extra} = parsePath(path);
-    console.log(special, filepath, extra);
     const element = elementAtPath(filepath);
-    console.log(element);
+    if (typeof element == 'undefined') return cb(E.ENOENT);
+    if (special == '.attrs' && extra) {
+        if (element.getAttribute(extra) !== null) {
+            console.log('remove attr', extra);
+            element.removeAttribute(extra);
+            return cb(0);
+        } else {
+            cb(E.ENOENT);
+        }
+    }
+    cb(E.ENOENT);
+}
+
+function create(path, mode, cb) { 
+    console.log(`creare ${path} mode: ${mode}`);
+    let {special, filepath, extra} = parsePath(path);
+    const element = elementAtPath(filepath);
+    if (typeof element == 'undefined') return cb(E.ENOENT);
+    if (special == '.attrs' && extra) {
+        if (element.getAttribute(extra) === null) {
+            console.log('new attr', extra);
+            element.setAttribute(extra, '');
+            fds[++fd] = {special, element, attrName: extra};
+            console.log('new fd', fd);
+            return cb(0, fd);
+        } else {
+            console.log('attr exists, opening for writing instead');
+            return open(path, 1, cb);
+            //cb(E.EEXIST);
+        }
+    }
+    cb(E.EPERM);
+}
+
+function open(path, flags, cb) {
+    console.log(`open ${path} flags: ${flags}`);
+    let {special, filepath, extra} = parsePath(path);
+    const element = elementAtPath(filepath);
     if (typeof element == 'undefined') return cb(E.ENOENT);
     if (special === '.html') {
         fds[++fd] = {special, element};
         console.log('new fd', fd);
-        return cb(null, fd);
+        return cb(0, fd);
     } else if (special == '.attrs' && extra) {
         if (element.getAttribute(extra) !== null) {
             fds[++fd] = {special, element, attrName: extra};
             console.log('new fd', fd);
-            return cb(null, fd);
+            return cb(0, fd);
         }
     }
     return cb(E.EISDIR);
@@ -262,8 +327,8 @@ function read(fd, length, pos, cb) {
         console.log('read: file not open');
         return cb(E.EBADF);
     }
-    let data;
     let {element, special, attrName} = fds[fd];
+    let data;
     console.log(element, special, attrName);
     if (special == '.attrs') {
         data = element.getAttribute(attrName);
@@ -280,7 +345,10 @@ const ops = {
     getattr,
     open,
     read,
-    release
+    release,
+    write,
+    create,
+    unlink
 };
 
 function run() {

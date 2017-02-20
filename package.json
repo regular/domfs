@@ -20,6 +20,7 @@
     "dnode": "^1.2.2",
     "ecstatic": "^2.1.0",
     "fuse-bindings": "^2.10.1",
+    "memoizeasync": "^1.0.0",
     "shoe": "0.0.15",
     "xtend": "^4.0.1"
   },

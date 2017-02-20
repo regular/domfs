@@ -1,4 +1,4 @@
-//jshint esversion: 6, -W083
+//jshint esversion: 6, -W083, -W046
 const shoe = require('shoe');
 const dnode = require('dnode');
 const E = require('./fuse-errors');
@@ -18,7 +18,7 @@ function parseSimpleSelector(selector) {
     return {tagName, id, classes, pos};
 }
 
-// returns selectos that are more or equal specific than
+// returns selectos that are more specific than, or equally specific as,
 // the one provided as `needle`
 // This is used to check for ambiguity
 function findMatches(needle, haystack) {
@@ -196,6 +196,9 @@ function release(path, fd, cb) {
 
 function getattr(path, cb) {
     console.log(`getattr ${path}`);
+    if (path.slice(0, 2) === '/.') {
+        return cb(E.EPERM);
+    }
     let {special, filepath, extra} = parsePath(path);
     console.log(special, filepath, extra);
     const element = elementAtPath(filepath);
@@ -213,22 +216,22 @@ function getattr(path, cb) {
             size = value.length;
             isDir = false;
         } else {
-            size = 100; //TODO
+            size = 0; //TODO
             isDir = true; 
         }
     } else { // so we are an element
-        size = 100; //TODO
+        size = 0; //TODO
         isDir = true; 
     }
 
     cb(null, {
-        mtime: new Date(),
-        atime: new Date(),
-        ctime: new Date(),
-        size,
-        mode: isDir ? 16877 : 33188, // TODO
-        uid: 1000,
-        gid: 1000
+        mtime: Date.now(),
+        atime: Date.now(),
+        ctime: Date.now(),
+        size: isDir ? 100 : size,
+        mode: isDir ? 0040555 : 0100444,
+        uid: 0,
+        gid: 0
     });
 }
 
@@ -272,7 +275,13 @@ function read(fd, length, pos, cb) {
     return cb(null, data);
 }
 
-const ops = {readdir, getattr, open, read, release};
+const ops = {
+    readdir,
+    getattr,
+    open,
+    read,
+    release
+};
 
 function run() {
     let stream = shoe('/domfs');

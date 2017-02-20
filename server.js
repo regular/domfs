@@ -6,16 +6,57 @@ const ecstatic = require('ecstatic')(__dirname, {cache: "no-cache"});
 const dnode = require('dnode');
 const xtend = require('xtend');
 const fuse = require('fuse-bindings');
- 
+const E = require('./fuse-errors');
+
 let server = http.createServer(ecstatic);
 server.listen(9999);
- 
+
 let sock = shoe((stream) => {
     console.log("incoming websocket connection");
     var d = dnode();
     d.on('remote', (remote) => {
         console.log('dnode remote ready, mounting fuse fs');
         let ops = xtend(remote, {
+            displayFolder: true,
+
+            /*
+            // -- from mount-url
+            write: function (path, handle, buf, len, offset, cb) { cb(E.EPERM); },
+            unlink: function (path, cb) { cb(E.EPERM); },
+            rename: function (src, dst, cb) { cb(E.EPERM); },
+            mkdir: function (path, mode, cb) { cb(E.EPERM); },
+            rmdir: function (path, cb) { cb(E.EPERM); },
+            create: function (path, mode, cb) { cb(E.EPERM); },
+            getxattri: function (path, name, buffer, length, offset, cb) { cb(E.EPERM); },
+            setxattr: function (path, name, buffer, length, offset, flags, cb) { cb(0); },
+            destroy: function (cb) {cb();},
+      
+            statfs: function (path, cb) {
+                cb(0, {
+                    bsize: 1000000,
+                    frsize: 1000000,
+                    blocks: 1000000,
+                    bfree: 1000000,
+                    bavail: 1000000,
+                    files: 1000000,
+                    ffree: 1000000,
+                    favail: 1000000,
+                    fsid: 1000000,
+                    flag: 1000000,
+                    namemax: 1000000
+                });
+            },
+            // --
+            */
+            getattr: function(path, cb) {
+                remote.getattr(path, (err, stat) => {
+                    if (err) return cb(err);
+                    stat.gid = process.getgid();
+                    stat.uid = process.getuid();
+                    cb(null, stat);
+                });
+            },
+
             read: function(path, fd, buf, len, pos, cb) {
                 console.log('read-wrapper', path, fd, len, pos);
                 remote.read(fd, len, pos, (err, str) => {
@@ -42,22 +83,8 @@ let sock = shoe((stream) => {
             });
         });
 
-        /*
-        remote.open('/body/article:nth-child(4)/.html', (err, fd)=> {
-            if (err) return console.log(err);
-            remote.read(fd, 200, 0, (err, data)=> {
-                if (err) return console.log(err);
-                console.log('data:' + data);
-                //d.end();
-            });
-        });
-        */
     });
     stream.pipe(d).pipe(stream);
-
-    //stream.write('readdir /body/article:nth-child(4)\n');
-    //stream.write('open /body/article:nth-child(4)/div.Klaas/.attrs/class\n');
-    //stream.write('read 1 3 1\n'); // fd, length, pos
 });
 
 sock.install(server, '/domfs');

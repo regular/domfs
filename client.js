@@ -2,6 +2,8 @@
 const shoe = require('shoe');
 const dnode = require('dnode');
 const E = require('./fuse-errors');
+const once = require('once');
+const unpipe = require('unpipe');
 
 const specialFiles = '.html .attrs';
 
@@ -41,7 +43,7 @@ function findMatches(needle, haystack) {
         // all specified classes must exist
         let isMatch = true;
         (n.classes || []).forEach( (c)=> {
-            console.log(h);
+            //console.log(h);
             if (!h.classes || !h.classes.includes(c)) isMatch = false;
         });
 
@@ -65,18 +67,19 @@ function elementAtPath(filepath) {
     } catch(e) {}
 
     if (elements === undefined) {
-        console.log(`nothing matches selector: ${selector}`);
+        console.error(`nothing matches selector: ${selector}`);
         return undefined;
     }
 
     if (elements.length>1) {
-        console.log(`Selector is ambiguous: ${selector}`);
+        console.error(`Selector is ambiguous: ${selector}`);
         return undefined;
     }
     return elements[0];
 }
 
 function createUniqueNamesForElements(elements) {
+    if (!elements) return [];
     // first we try to create unqiue names using tagName, id and class
     let result = [];
     for(let i=0; i<elements.length; ++i) {
@@ -117,7 +120,7 @@ function createUniqueNamesForElements(elements) {
         }
     }
     
-    // force unqiqueness by including
+    // force uniqueness by including
     // the child's position among its peers
     for (let i in nonUnique) {
         i = parseInt(i);
@@ -207,6 +210,7 @@ function getattr(path, cb) {
     if (special == '.html') {
         isDir = false;
         size = element.innerHTML.length;
+        readonly = false;
     } else if (special == '.attrs') {
         if (extra) {
             let value = element.getAttribute(extra);
@@ -251,10 +255,12 @@ function write(fd, buf, length, pos, cb) {
     let data;
     if (special == '.attrs') {
         data = element.getAttribute(attrName);
-        console.log('old data', data);
         data = modify(data);
         element.setAttribute(attrName, data);
-        console.log('new data', data);
+    } else if (special == ".html") {
+        data = element.innerHTML;
+        data = modify(data);
+        element.innerHTML = data;
     } else {
         return cb(E.EPERM); 
     }
@@ -275,8 +281,11 @@ function unlink(path, cb) {
             element.removeAttribute(extra);
             return cb(0);
         } else {
-            cb(E.ENOENT);
+            return cb(E.ENOENT);
         }
+    } if (special == ".html") {
+        element.innerHTML = '';
+        return cb(0);
     }
     cb(E.ENOENT);
 }
@@ -294,12 +303,12 @@ function create(path, mode, cb) {
             console.log('new fd', fd);
             return cb(0, fd);
         } else {
-            console.log('attr exists, opening for writing instead');
-            return open(path, 1, cb);
-            //cb(E.EEXIST);
+            return cb(E.EEXIST);
         }
+    } else if (special == '.html') {
+        return open(path, 1, cb);
     }
-    cb(E.EPERM);
+    return cb(E.EPERM);
 }
 
 function open(path, flags, cb) {
@@ -307,7 +316,7 @@ function open(path, flags, cb) {
     let {special, filepath, extra} = parsePath(path);
     const element = elementAtPath(filepath);
     if (typeof element == 'undefined') return cb(E.ENOENT);
-    if (special === '.html') {
+    if (special == '.html') {
         fds[++fd] = {special, element};
         console.log('new fd', fd);
         return cb(0, fd);
@@ -351,20 +360,53 @@ const ops = {
     unlink
 };
 
-function run() {
-    let stream = shoe('/domfs');
-    stream.pipe(dnode(ops)).pipe(stream);
+function connect(websocketPath, cb) {
+    if (typeof websocketPath == 'function') {
+        cb = websocketPath;
+        websocketPath = '/domfs';
+    }
+    cb = once(cb);
+    console.log('domfs connecting to', websocketPath);
+    let stream = shoe(websocketPath);
+
+    let togo = 2;
+    let results = {};
+    function handler(key) {
+        return function(err, result, cb2) {
+            console.error(key, 'error', err);
+            if (err) return cb(err);
+            results[key] = result;
+            console.log('received', key);
+            if (--togo === 0) cb(null, results);
+            if (cb2) cb2(null);
+        };
+    }
+
+    ops.onMounted = handler('mountPoint');
+    let d = dnode(ops);
+    d.on('remote', (remote) => handler('remote')(null, remote) );
+    
+    stream.on('error', cb);
+    stream.pipe(d).pipe(stream);
+
+    function disconnect() {
+        unpipe(d);
+        unpipe(stream);
+        d.end();
+        stream.end();
+    }
+    
+    return {disconnect};
 }
 
-module.exports = {
+module.exports = connect;
+module.exports.ops = ops;
+module.exports.internals = {
     parseSimpleSelector,
     findMatches,
     elementAtPath,
     createUniqueNamesForElements,
     getAttributeNames,
-    parsePath,
-    readdir,
-    run
+    parsePath
 };
 
-run();

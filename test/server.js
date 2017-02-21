@@ -2,8 +2,10 @@
 const http = require('http');
 const browserify = require('browserify');
 const Browser = require('zombie');
+const fs = require('fs');
+const domfs = require('../server');
 
-http.createServer( (req, res) => {
+let server = http.createServer( (req, res) => {
     //console.log(`${req.method} ${req.url}`);
     if (req.url === '/test.js') {
         res.writeHead(200, {'content-type': 'application/javascript'});
@@ -20,7 +22,11 @@ http.createServer( (req, res) => {
         res.writeHead(404);
         res.end();
     }
-}).listen( function (err) {
+});
+
+domfs(server, {api: fs, mountPoint: __dirname + '/mnt'});
+
+server.listen( function (err) {
     let server = this;
     if (err) {
         console.error(err);
@@ -34,9 +40,10 @@ http.createServer( (req, res) => {
         try {
             browser.assert.evaluate('allTestsPassed', true, 'all tests passed');
         } catch(e) {
-           process.exit(1);
+            process.exitCode = 1;
         }
-        process.exit(0);
+        server.close();
+        browser.tabs.closeAll();
     });
 });
 

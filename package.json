@@ -21,7 +21,9 @@
     "ecstatic": "^2.1.0",
     "fuse-bindings": "^2.10.1",
     "memoizeasync": "^1.0.0",
+    "once": "^1.4.0",
     "shoe": "0.0.15",
+    "unpipe": "^1.0.0",
     "xtend": "^4.0.1"
   },
   "devDependencies": {

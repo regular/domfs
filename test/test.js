@@ -1,7 +1,10 @@
 //jshint esversion: 6
-const client = require('./client');
 const test = require('tape');
-const tbe = require('tap-browser-el')();
+const client = require('../client');
+
+test.onFinish( function() {
+    window.allTestsPassed = this.count === this.pass;
+});
 
 test('parsePath', (t)=> {
     t.deepEqual(client.parsePath('/.html'),{
@@ -140,18 +143,37 @@ test('elementAtPath', (t)=> {
         t.pass('Relative paths should cause an exception');
     }
 
-    try {
-        client.elementAtPath('/body/article');
-        t.fail('Ambiguous paths should cause an exception');
-    } catch(e) {
-        t.pass('Ambiguous paths should cause an exception');
-    }
+    t.notOk(client.elementAtPath('/body/article'), 'Should return falsey for ambigious paths');
     t.end();
 });
 
 test('createUniqueNamesForElements', (t)=> {
+    let parent = document.createElement('div');
+    document.querySelector('body').appendChild(parent);
+    parent.innerHTML = `
+        <article>
+            <div></div>
+            <div></div>
+            <div></div>
+        </article>
+        <article>
+            <div id='A'></div>
+            <div id='B'></div>
+            <div id='C'></div>
+        </article>
+        <article>
+            <div id='A'></div>
+            <div id='B'></div>
+            <div id='A'></div>
+        </article>
+        <article>
+            <div id="unique"></div>
+            <div name="my name"></div>
+            <div class="Klaas"></div>
+        </article> `;
+
     let names = client.createUniqueNamesForElements;
-    let anons = document.querySelector('article:first-child').children;
+    let anons = document.querySelector('article').children;
 
     t.deepEqual(names(anons), [
         'div:nth-child(1)',
@@ -180,4 +202,5 @@ test('createUniqueNamesForElements', (t)=> {
         'div.Klaas',
     ], 'should add nth-child, for selectors not unique among siblings');
     t.end();
+    document.querySelector('body').removeChild(parent);
 });

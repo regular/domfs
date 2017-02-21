@@ -4,7 +4,7 @@
   "description": "A FUSE-based filesystem that exposes a browser's DOM tree as a file tree - finally *mount* your browser!",
   "main": "index.js",
   "scripts": {
-    "test": "make test",
+    "test": "node test/server.js",
     "start": "node server.js"
   },
   "keywords": [
@@ -26,8 +26,8 @@
   },
   "devDependencies": {
     "browserify": "^14.0.0",
-    "tap-browser-el": "^2.0.0",
-    "tape": "^4.6.3"
+    "tape": "^4.6.3",
+    "zombie": "^5.0.5"
   },
   "repository": {
     "type": "git",

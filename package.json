@@ -4,7 +4,7 @@
   "description": "A FUSE-based filesystem that exposes a browser's DOM tree as a file tree - finally *mount* your browser!",
   "main": "index.js",
   "scripts": {
-    "test": "node test/server.js",
+    "test": "mkdir -p test/mnt && node test/server.js",
     "start": "node server.js"
   },
   "keywords": [

@@ -215,10 +215,13 @@ test.skip('connect to wrong utl', (t)=>{
 });
 
 test('connect', (t)=>{
-    let connection = connect('/domfs', (err, {mountPoint, remote})=>{
-        let fs = remote;
-        console.log('mp', mountPoint);
+    let connection = connect('/domfs', (err, result)=>{
         t.notOk(err, 'Should not fail when given correct websocket url.');
+        if (err) return t.end();
+
+        let {mountPoint, remote} = result;
+        let fs = remote;
+        console.log('Mount point is:', mountPoint);
 
         fs.readdir(mountPoint, (err, files)=>{
             t.error(err);

@@ -17,6 +17,7 @@
   "author": "Jan Bölsche <jan@lagomorph.de> (http://regular.codes)",
   "license": "MIT",
   "dependencies": {
+    "debug": "^2.6.1",
     "dnode": "^1.2.2",
     "ecstatic": "^2.1.0",
     "fuse-bindings": "^2.10.1",

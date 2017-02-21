@@ -3,6 +3,9 @@ const test = require('tape');
 const connect = require('../client');
 const impl = connect.internals;
 
+const debug = require('debug')('test');
+debug.log = console.log.bind(console);
+
 test.onFinish( function() {
     window.allTestsPassed = this.count === this.pass;
 });
@@ -221,7 +224,8 @@ test('connect', (t)=>{
 
         let {mountPoint, remote} = result;
         let fs = remote;
-        console.log('Mount point is:', mountPoint);
+
+        debug(`Mount point is: ${mountPoint}`);
 
         fs.readdir(mountPoint, (err, files)=>{
             t.error(err);

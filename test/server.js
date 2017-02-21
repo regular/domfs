@@ -3,10 +3,12 @@ const http = require('http');
 const browserify = require('browserify');
 const Browser = require('zombie');
 const fs = require('fs');
+const debug = require('debug')('test-server');
+
 const domfs = require('../server');
 
 let server = http.createServer( (req, res) => {
-    //console.log(`${req.method} ${req.url}`);
+    debug(`${req.method} ${req.url}`);
     if (req.url === '/test.js') {
         res.writeHead(200, {'content-type': 'application/javascript'});
         let b = browserify(__dirname + '/test.js');
@@ -15,6 +17,9 @@ let server = http.createServer( (req, res) => {
         res.writeHead(200, {'content-type': 'text/html'});
         res.end(`<html>
             <body>
+                <script>
+                    localStorage.debug = "${process.env.DEBUG || ''}";
+                </script>
                 <script src='test.js'></script>
             </body>
         </html>`);
@@ -33,7 +38,7 @@ server.listen( function (err) {
         process.exit(1);
     }
     let url = `http://localhost:${server.address().port}/`;
-    //console.log(`Server running on ${url}`);
+    debug(`Server running on ${url}`);
     let browser = new Browser();
     browser.visit(url, (err)=>{
         if (err) throw err;

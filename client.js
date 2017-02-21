@@ -4,6 +4,7 @@ const dnode = require('dnode');
 const E = require('./fuse-errors');
 const once = require('once');
 const unpipe = require('unpipe');
+const debug = require('debug')('domfs:client');
 
 const specialFiles = '.html .attrs';
 
@@ -169,7 +170,7 @@ function parsePath(filepath) {
 //
 
 function readdir(path, cb) {
-    console.log('readdir', path);
+    debug('readdir %s', path);
     let {special, filepath, extra} = parsePath(path);
     const parent = elementAtPath(filepath);
     let result;
@@ -191,13 +192,13 @@ function readdir(path, cb) {
 }
 
 function release(path, fd, cb) {
-    console.log('release', path, fd);
+    debug(`release ${path} ${fd}`);
     delete fds[fd];
     return cb(0);
 }
 
 function getattr(path, cb) {
-    console.log(`getattr ${path}`);
+    debug(`getattr ${path}`);
     if (path.slice(0, 2) === '/.') {
         return cb(E.EPERM);
     }
@@ -246,9 +247,9 @@ function write(fd, buf, length, pos, cb) {
         data = data.slice(0, pos) + buf.slice(0, length) + data.slice(pos + length);
         return data; 
     }
-    console.log('write', fd, length, pos);
+    debug(`write ${fd} ${length} ${pos}`);
     if (typeof fds[fd] === 'undefined') {
-        console.log('write: file not open');
+        debug('write: file not open');
         return cb(E.EBADF);
     }
     let {element, special, attrName} = fds[fd];
@@ -271,13 +272,13 @@ function write(fd, buf, length, pos, cb) {
 rename: function (src, dst, cb) { cb(E.EPERM); },
 */
 function unlink(path, cb) {
-    console.log(`unlink ${path}`);
+    debug(`unlink ${path}`);
     let {special, filepath, extra} = parsePath(path);
     const element = elementAtPath(filepath);
     if (typeof element == 'undefined') return cb(E.ENOENT);
     if (special == '.attrs' && extra) {
         if (element.getAttribute(extra) !== null) {
-            console.log('remove attr', extra);
+            debug('remove attr', extra);
             element.removeAttribute(extra);
             return cb(0);
         } else {
@@ -291,16 +292,16 @@ function unlink(path, cb) {
 }
 
 function create(path, mode, cb) { 
-    console.log(`creare ${path} mode: ${mode}`);
+    debug(`creare ${path} mode: ${mode}`);
     let {special, filepath, extra} = parsePath(path);
     const element = elementAtPath(filepath);
     if (typeof element == 'undefined') return cb(E.ENOENT);
     if (special == '.attrs' && extra) {
         if (element.getAttribute(extra) === null) {
-            console.log('new attr', extra);
+            debug('new attr', extra);
             element.setAttribute(extra, '');
             fds[++fd] = {special, element, attrName: extra};
-            console.log('new fd', fd);
+            debug('new fd', fd);
             return cb(0, fd);
         } else {
             return cb(E.EEXIST);
@@ -312,18 +313,18 @@ function create(path, mode, cb) {
 }
 
 function open(path, flags, cb) {
-    console.log(`open ${path} flags: ${flags}`);
+    debug(`open ${path} flags: ${flags}`);
     let {special, filepath, extra} = parsePath(path);
     const element = elementAtPath(filepath);
     if (typeof element == 'undefined') return cb(E.ENOENT);
     if (special == '.html') {
         fds[++fd] = {special, element};
-        console.log('new fd', fd);
+        debug('new fd', fd);
         return cb(0, fd);
     } else if (special == '.attrs' && extra) {
         if (element.getAttribute(extra) !== null) {
             fds[++fd] = {special, element, attrName: extra};
-            console.log('new fd', fd);
+            debug('new fd', fd);
             return cb(0, fd);
         }
     }
@@ -331,20 +332,20 @@ function open(path, flags, cb) {
 }
 
 function read(fd, length, pos, cb) {
-    console.log('read', fd, length, pos);
+    debug('read', fd, length, pos);
     if (typeof fds[fd] === 'undefined') {
-        console.log('read: file not open');
+        debug('read: file not open');
         return cb(E.EBADF);
     }
     let {element, special, attrName} = fds[fd];
     let data;
-    console.log(element, special, attrName);
+    debug(element, special, attrName);
     if (special == '.attrs') {
         data = element.getAttribute(attrName);
     } else if (special == '.html') {
         data = element.innerHTML;
     }
-    console.log('data', data);
+    debug('data', data);
     data = data.slice(pos, pos + length);
     return cb(null, data);
 }
@@ -366,17 +367,17 @@ function connect(websocketPath, cb) {
         websocketPath = '/domfs';
     }
     cb = once(cb);
-    console.log('domfs connecting to', websocketPath);
+    debug('domfs connecting to', websocketPath);
     let stream = shoe(websocketPath);
 
     let togo = 2;
     let results = {};
     function handler(key) {
         return function(err, result, cb2) {
-            console.error(key, 'error', err);
+            debug(key, 'error', err);
             if (err) return cb(err);
             results[key] = result;
-            console.log('received', key);
+            debug('received', key);
             if (--togo === 0) cb(null, results);
             if (cb2) cb2(null);
         };

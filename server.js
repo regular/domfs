@@ -8,9 +8,10 @@ const fuse = require('fuse-bindings');
 const E = require('./fuse-errors');
 const memoizeasync = require('memoizeasync');
 const once = require('once');
+const debug = require('debug')('domfs:server');
 
 function mount(mountPoint, remote, cb) {
-    console.log('mounting fuse fs');
+    debug('mounting fuse fs');
     let ops = xtend(remote, {
         displayFolder: true,
 
@@ -50,7 +51,7 @@ function mount(mountPoint, remote, cb) {
         }/*, {maxAge: 1000, errors: true})*/, // <-- this might cause trouble?
 
         read: function(path, fd, buf, len, pos, cb) {
-            console.log('read-wrapper', path, fd, len, pos);
+            debug('read-wrapper', path, fd, len, pos);
             remote.read(fd, len, pos, (err, str) => {
                 if (err) return cb(err);
                 if (!str) return cb(0);
@@ -59,7 +60,7 @@ function mount(mountPoint, remote, cb) {
             });
         },
         write: function(path, fd, buf, len, pos, cb) {
-            console.log('write-wrapper', path, fd, len, pos);
+            debug('write-wrapper', path, fd, len, pos);
             remote.write(fd, buf.toString(), len, pos, cb);
         }
     });
@@ -68,10 +69,10 @@ function mount(mountPoint, remote, cb) {
     // TODO: unmount on dnode disconnect
     const onExit = once(function(err) {
         if (err) console.error('onExit', err, err.stack);
-        console.log('unmounting ...');
+        debug('unmounting ...');
         fuse.unmount(mountPoint, function (err) {
             if (err) console.error('Error while unmounting', err);
-            else console.log('done');
+            else debug('done');
             process.exit();
         });
     });
@@ -90,13 +91,13 @@ module.exports = function(server, options = {}) {
     let {websockPath, api} = options;
     let mountPoint = options.mountPoint || './mnt';
     let sock = shoe((stream) => {
-        console.error("incoming websocket connection");
+        debug("incoming websocket connection");
         var d = dnode(api||{});
         let unmount;
 
         d.on('remote', ( remote) => {
             unmount = mount(mountPoint, remote, (err)=>{
-                if (err) console.error(err);
+                if (err) console.error('Error while mounting', err);
                 remote.onMounted(err, mountPoint);
             });
         });
@@ -104,7 +105,7 @@ module.exports = function(server, options = {}) {
         stream.pipe(d).pipe(stream);
 
         stream.on('close', ()=>{
-            console.error('websocket closed');
+            debug('websocket closed');
             if (unmount) unmount();
         });
     });

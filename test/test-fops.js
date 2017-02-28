@@ -366,7 +366,7 @@ test('write', (t)=>{
         });
     });
 
-    t.test('head html, overwrite with longer ', (t)=>{
+    t.test('head html', (t)=>{
         open('/head/.html', openFlags, (err, fd) => {
             let data = 'The quick brown fox jumps over the lazy dog.';
             write(fd, data, data.length, 0, (err, result) => {
@@ -386,3 +386,45 @@ test('write', (t)=>{
 });
 
 
+test('create', (t)=>{
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    document.write(`<html></html>`);
+
+    const mode = 0;
+    t.test('create root attribute', (t)=>{
+        Fops(document).create('/.attrs/lang', mode, (err, fd) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(fd, 1, 'fd should be 1');
+            let value = document.querySelector('html').getAttribute('lang');
+            t.equal(value, '', 'attribute should exist and should be empty');
+            t.end();
+        });
+    });
+
+    t.test('create root attributei w/ illegl name', (t)=>{
+        Fops(document).create('/.attrs/.bla', mode, (err, fd) => {
+            t.equal(err, E.EPERM, 'Error should be EPERM');
+            t.equal(fd, undefined, 'fd should be undefined');
+            t.end();
+        });
+    });
+
+    t.test('create root html', (t)=>{
+        Fops(document).create('/.html', mode, (err, fd) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(fd, 1, 'fd should be 1');
+            t.end();
+        });
+    });
+
+    t.test('create html at invalid path', (t)=>{
+        Fops(document).create('/:/.html', mode, (err, fd) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.equal(fd, undefined, 'fd should be undefined');
+            t.end();
+        });
+    });
+
+});

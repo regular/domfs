@@ -1,4 +1,4 @@
-//jshint esversion: 6
+//jshint esversion: 6, -W060, -W046
 const test = require('tape');
 const Browser = require('zombie');
 const debug = require('debug')('test');
@@ -189,7 +189,7 @@ test('open', (t)=>{
         </html>
     `);
     let openCount = 0;
-    function onOpen() {openCount++;};
+    function onOpen() {openCount++;}
     const flags = 0;
 
     t.test('open root', (t)=>{
@@ -248,6 +248,78 @@ test('open', (t)=>{
             t.equal(openCount, 2, 'Should not have called onOpen');
             t.equal(err, E.ENOENT, 'Should return err ENOENT');
             t.end();
+        });
+    });
+});
+
+
+test('read', (t)=>{
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    document.write(`
+        <html lang="en" id="blah">
+            <head>
+                <title lang="de">Hello World</title>
+            </head>
+        </html>
+    `);
+
+    t.test('non-open file', (t)=>{
+        Fops(document).read(0, 0, 0, (err, result) => {
+            t.equal(err, E.EBADF, 'Should return error EBADF');
+            t.end();
+        });
+    });
+    let {open, read} =  Fops(document);
+    const openFlags = 0;
+
+    t.test('root attributes value, single bytes', (t)=>{
+        open('/.attrs/lang', openFlags, (err, fd) => {
+            read(fd, 2, 0, (err, data) => {
+                t.equal(err, 0, 'Should not error');
+                t.equal(data, 'en', 'Should read correct data');
+                read(fd, 1, 0, (err, data) => {
+                    t.equal(err, 0, 'Should not error');
+                    t.equal(data, 'e', 'Should read correct data');
+                    read(fd, 1, 1, (err, data) => {
+                        t.equal(err, 0, 'Should not error');
+                        t.equal(data, 'n', 'Should read correct data');
+                        t.end();
+                    });
+                });
+            });
+        });
+    });
+    t.test('root attributes value, entire file', (t)=>{
+        open('/.attrs/id', openFlags, (err, fd) => {
+            read(fd, 4, 0, (err, data) => {
+                t.equal(err, 0, 'Should not error');
+                t.equal(data, 'blah', 'Should read correct data');
+                t.end();
+            });
+        });
+    });
+
+    t.test('html in pieces', (t)=>{
+        open('/head/title/.html', openFlags, (err, fd) => {
+            read(fd, 5, 0, (err, data) => {
+                t.equal(err, 0, 'Should not error');
+                t.equal(data, 'Hello', 'Should read correct data');
+                read(fd, 5, 6, (err, data) => {
+                    t.equal(err, 0, 'Should not error');
+                    t.equal(data, 'World', 'Should read correct data');
+                    read(fd, 11, 0, (err, data) => {
+                        t.equal(err, 0, 'Should not error');
+                        t.equal(data, 'Hello World', 'Should read correct data');
+                        read(fd, 100, 0, (err, data) => {
+                            t.equal(err, 0, 'Should not error');
+                            t.equal(data, 'Hello World', 'Should provide all data if tried to read past the end.');
+                            t.end();
+                        });
+                    });
+                });
+            });
         });
     });
 });

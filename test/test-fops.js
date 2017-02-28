@@ -323,3 +323,66 @@ test('read', (t)=>{
         });
     });
 });
+
+
+test('write', (t)=>{
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    document.write(`
+        <html lang="en" id="blah">
+            <head><title lang="de">Hello World</title></head>
+        </html>
+    `);
+
+    t.test('non-open file', (t)=>{
+        Fops(document).write(0, 'blah', 0, 0, (err, result) => {
+            t.equal(err, E.EBADF, 'Should return error EBADF');
+            t.end();
+        });
+    });
+    let {open, write} =  Fops(document);
+    const openFlags = 0;
+
+    t.test('root attributes value, single bytes', (t)=>{
+        open('/.attrs/lang', openFlags, (err, fd) => {
+            write(fd, 'x', 1, 0, (err, result) => {
+                t.equal(err, 0, 'Should not error');
+                t.equal(result, 1, 'Result should be number of bytes written');
+                t.equal(document.querySelector('html').getAttribute('lang'), 'xn', 'Should alter first char of attribute value');
+                write(fd, 'y', 1, 1, (err) => {
+                    t.equal(err, 0, 'Should not error');
+                    t.equal(result, 1, 'Result should be number of bytes written');
+                    t.equal(document.querySelector('html').getAttribute('lang'), 'xy', 'Should alter 2nd char of attribute value');
+
+                    write(fd, 'z', 1, 2, (err, data) => {
+                        t.equal(err, 0, 'Should not error');
+                        t.equal(result, 1, 'Result should be number of bytes written');
+                        t.equal(document.querySelector('html').getAttribute('lang'), 'xyz', 'Should append char to attribute value');
+                        t.end();
+                    });
+                });
+            });
+        });
+    });
+
+    t.test('head html, overwrite with longer ', (t)=>{
+        open('/head/.html', openFlags, (err, fd) => {
+            let data = 'The quick brown fox jumps over the lazy dog.';
+            write(fd, data, data.length, 0, (err, result) => {
+                t.equal(err, 0, 'Should not error');
+                t.equal(result, data.length, 'Result should be number of bytes written');
+                t.equal(document.querySelector('head').innerHTML, data, 'Should have altered innerHTML');
+                write(fd, '  A', 3, 0, (err, result) => {
+                    t.equal(err, 0, 'Should not error');
+                    t.equal(result, 3, 'Result should be number of bytes written');
+                    t.equal(document.querySelector('head').innerHTML, '  A quick brown fox jumps over the lazy dog.', 'Should have altered innerHTML');
+                    t.end();
+                });
+            });
+        });
+    });
+
+});
+
+

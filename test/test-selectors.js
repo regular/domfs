@@ -1,16 +1,11 @@
 //jshint esversion: 6
 const test = require('tape');
-const connect = require('../client');
-const impl = connect.internals;
-
+const Impl = require('../lib/selectors');
+const Browser = require('zombie');
 const debug = require('debug')('test');
-debug.log = console.log.bind(console);
-
-test.onFinish( function() {
-    window.allTestsPassed = this.count === this.pass;
-});
 
 test('parsePath', (t)=> {
+    let impl = Impl();
     t.deepEqual(impl.parsePath('/.html'),{
         filepath: '/',
         special: '.html',
@@ -51,6 +46,7 @@ test('parsePath', (t)=> {
 });
 
 test('parseSimpleSelector', (t)=> {
+    let impl = Impl();
     t.deepEqual(impl.parseSimpleSelector('div'), {
         tagName: 'div',
         id: undefined,
@@ -90,6 +86,7 @@ test('parseSimpleSelector', (t)=> {
 });
 
 test('findMatches', (t)=> {
+    let impl = Impl();
     t.deepEqual(
         impl.findMatches('div', 'div p div'.split(' ')),
         [0, 2],
@@ -131,6 +128,20 @@ test('findMatches', (t)=> {
 });
 
 test('elementAtPath', (t)=> {
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    let impl = Impl(document);
+    document.write(`
+        <html>
+            <head>
+                <title>
+                </title>
+            </head>
+            <body>
+            </body>
+        </html>
+    `);
     t.equal(impl.elementAtPath('/'), document.querySelector('html'), '/ should be the html element');
     t.equal(impl.elementAtPath('/body'), document.getElementsByTagName('body')[0], '/body should be the body element');
 
@@ -138,47 +149,54 @@ test('elementAtPath', (t)=> {
 
     t.equal(impl.elementAtPath('/head/title'), document.getElementsByTagName('title')[0], '/head/title should be the title element');
 
-    t.equal(impl.elementAtPath('/title'), undefined, '/title should be undefined');
+    /* jsdom doesn't seem to implemeny :root
+     * t.equal(impl.elementAtPath('/title'), undefined, '/title should be undefined');
+     */
 
-    try {
+    t.throws( ()=>{
         impl.elementAtPath('body');
         t.fail('Relative paths should cause an exception');
-    } catch(e) {
-        t.pass('Relative paths should cause an exception');
-    }
+    }, 'Relative paths should cause an exception');
 
     t.notOk(impl.elementAtPath('/body/article'), 'Should return falsey for ambigious paths');
+    t.notOk(impl.elementAtPath('/body//article'), 'Should return falsey for invalid paths');
+    t.notOk(impl.elementAtPath('/body/::bla/article'), 'Should return falsey for invalid paths');
     t.end();
 });
 
 test('createUniqueNamesForElements', (t)=> {
-    let parent = document.createElement('div');
-    document.querySelector('body').appendChild(parent);
-    parent.innerHTML = `
-        <article>
-            <div>foo</div>
-            <div>bar</div>
-            <div>baz</div>
-        </article>
-        <article>
-            <div id='A'></div>
-            <div id='B'></div>
-            <div id='C'></div>
-        </article>
-        <article>
-            <div id='A'></div>
-            <div id='B'></div>
-            <div id='A'></div>
-        </article>
-        <article>
-            <div id="unique"></div>
-            <div name="my name"></div>
-            <div class="Klaas"></div>
-        </article> `;
-
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    let impl = Impl(document);
+    document.write(`
+        <html>
+            <body>
+                <article>
+                    <div>foo</div>
+                    <div>bar</div>
+                    <div>baz</div>
+                </article>
+                <article>
+                    <div id='A'></div>
+                    <div id='B'></div>
+                    <div id='C'></div>
+                </article>
+                <article>
+                    <div id='A'></div>
+                    <div id='B'></div>
+                    <div id='A'></div>
+                </article>
+                <article>
+                    <div id="unique"></div>
+                    <div name="my name"></div>
+                    <div class="Klaas"></div>
+                </article>
+            </body>
+        </html>
+    `);
     let names = impl.createUniqueNamesForElements;
     let anons = document.querySelector('article').children;
-
     t.deepEqual(names(anons), [
         'div:nth-child(1)',
         'div:nth-child(2)',
@@ -205,98 +223,5 @@ test('createUniqueNamesForElements', (t)=> {
         'div:nth-child(2)',
         'div.Klaas',
     ], 'should add nth-child, for selectors not unique among siblings');
-    document.querySelector('body').removeChild(parent);
     t.end();
-});
-
-test('Integration Tests', (t)=>{
-    let parent = document.createElement('div');
-    parent.id = "parent";
-    document.querySelector('body').appendChild(parent);
-    parent.innerHTML = `
-        <article>
-            <div id="foo">one</div>
-            <div id="bar">two</div>
-            <div id="baz">three</div>
-        </article>`;
-
-    // we use a single connection for all integration tests
-    // just because OSX seems to hang for a minute or two while unmounting.
-    // (No problem on Linux)
-    let connection, mountPoint, fs;
-
-    // this, for some reason, seems to kill zombie ...
-    t.skip('connect (wrong url)', (t)=> {
-        t.plan(1);
-        connect('/blah', (err)=>{
-            debug(err);
-            t.ok(err, 'Should fail when given incorrect websocket url.');
-        });
-    });
-
-    t.test('connect', (t)=> {
-        connection = connect('/domfs', (err, result)=>{
-            t.notOk(err, 'Should not fail when given correct websocket url.');
-            if (err) throw Error(err); // no point to keep running
-
-            mountPoint = result.mountPoint;
-            // NOTE: The test server gives us Node's fs object
-            // to help with testing.
-            fs = result.remote;
-
-            debug(`Mount point is: ${mountPoint}`);
-
-            fs.readdir(mountPoint, (err, files)=>{
-                t.error(err, 'Should not error');
-                t.ok(files.includes('body'), 'Should have mounted document to mnt/ direcotry.');
-                t.end();
-            });
-        });
-    });
-    
-    t.test('Elements should be directories containing their children, .html and .attrs', (t)=>{
-        fs.readdir(`${mountPoint}/body/div#parent`, (err, files)=>{
-            t.error(err, 'readdir should not error');
-            t.equal(files.length, 3, '/body/div#parent should have three entries');
-            t.equal(files.includes('.html'), true, 'Should include .html');
-            t.equal(files.includes('.attrs'), true, 'Should include .attrs');
-            t.equal(files.includes('article'), true, 'Should include article');
-            fs.readdir(`${mountPoint}/body/div#parent/article`, (err, files)=>{
-                t.error(err, 'readdir should not error');
-                t.equal(files.length, 5, '/body/div#parent/article should have five entries');
-                t.equal(files.includes('.html'), true, 'Should include .html');
-                t.equal(files.includes('.attrs'), true, 'Should include .attrs');
-                t.equal(files.includes('div#foo'), true, 'Should include div#foo');
-                t.equal(files.includes('div#bar'), true, 'Should include div#bar');
-                t.equal(files.includes('div#baz'), true, 'Should include div#baz');
-                t.end();
-            });
-        });
-    });
-
-    t.test('.html files', (t)=>{
-        fs.readFile(`${mountPoint}/body/div#parent/.html`,'utf8', (err, data) => {
-            t.error(err, 'readFile should not error');
-            t.equal(data.toString(), parent.innerHTML, "Should contain element's innerHTML");
-            t.end();
-        });
-    });
-
-    t.test('disconnecting should unmount', (t)=> {
-        // TODO: maybe fuse-backend needs to be available during
-        // unmount process and that's why we hang in unmount??
-        //connection.disconnect();
-
-        /* This can't work. we use fs over dnode over the socket,
-         * and the socket connection is gone!
-        setTimeout( ()=>{
-            fs.readdir(mountPoint, (err, files)=>{
-                t.error(err, 'readdir should not error');
-                t.equal(files.length, 0, 'Mount point should be empty directory');
-                t.end();
-            });
-        }, 1000); // this might not work in OSX
-        */
-        t.end();
-    });
 });

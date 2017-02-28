@@ -41,14 +41,16 @@ server.listen( function (err) {
     debug(`Server running on ${url}`);
     let browser = new Browser();
     browser.visit(url, (err)=>{
+        debug('Zombie is done visiting');
         if (err) throw err;
         try {
             browser.assert.evaluate('allTestsPassed', true, 'all tests passed');
         } catch(e) {
+            debug('Some tests failed or did not run.');
             process.exitCode = 1;
         }
-        server.close();
-        browser.tabs.closeAll();
+       server.close();
+       browser.tabs.closeAll();
     });
 });
 

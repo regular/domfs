@@ -428,3 +428,58 @@ test('create', (t)=>{
     });
 
 });
+
+test('unlink', (t)=>{
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    document.write(`
+        <html lang="en" id="blah">
+            <head><title lang="de">Hello World</title></head>
+        </html>
+    `);
+
+    t.test('unlink attribute', (t)=>{
+        Fops(document).unlink('/.attrs/id', (err) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(document.querySelector('html').getAttribute('id'), null, 'Attribute should be gone.');
+            t.end();
+        });
+    });
+
+    t.test('unlink non-existing attribute', (t)=>{
+        Fops(document).unlink('/.attrs/id', (err) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.end();
+        });
+    });
+
+    t.test('unlink .html', (t)=>{
+        Fops(document).unlink('/head/.html', (err) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(document.querySelector('head').innerHTML, '', 'innerHTML should be empty');
+            t.end();
+        });
+    });
+
+    t.test('unlink .html, non-existing path', (t)=>{
+        Fops(document).unlink('/foo/.html', (err) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.end();
+        });
+    });
+
+    t.test('unlink non-existing dotfile', (t)=>{
+        Fops(document).unlink('/.htm', (err) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.end();
+        });
+    });
+
+    t.test('unlink .html plus extra', (t)=>{
+        Fops(document).unlink('/.html/foo', (err) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.end();
+        });
+    });
+});

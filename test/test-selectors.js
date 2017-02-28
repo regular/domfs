@@ -1,4 +1,4 @@
-//jshint esversion: 6
+//jshint esversion: 6, -W060
 const test = require('tape');
 const Impl = require('../lib/selectors');
 const Browser = require('zombie');
@@ -11,6 +11,12 @@ test('parsePath', (t)=> {
         special: '.html',
         extra: undefined
     }, '/.html should be: /, .html, undefined');
+
+    t.deepEqual(impl.parsePath('/.html/extra'), {
+        filepath: undefined,
+        special: undefined,
+        extra: undefined
+    }, '/.html/extra should be undefined');
 
     t.deepEqual(impl.parsePath('/.attrs'),{
         filepath: '/',

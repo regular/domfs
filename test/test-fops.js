@@ -176,3 +176,78 @@ test('getattr', (t)=>{
         });
     });
 });
+
+test('open', (t)=>{
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    document.write(`
+        <html lang="en" id="blah">
+            <head>
+                <title lang="de">Hello World</title>
+            </head>
+        </html>
+    `);
+    let openCount = 0;
+    function onOpen() {openCount++;};
+    const flags = 0;
+
+    t.test('open root', (t)=>{
+        Fops(document, {onOpen}).open('/', flags, (err, result) => {
+            t.equal(openCount, 0, 'Should not have called onOpen');
+            t.equal(err, E.EISDIR, 'Should return error EISDIR');
+            t.end();
+        });
+    });
+    t.test('attributes of root', (t)=>{
+        Fops(document, {onOpen}).open('/.attrs', flags, (err, result) => {
+            t.equal(openCount, 0, 'Should not have called onOpen');
+            t.equal(err, E.EISDIR, 'Should return error EISDIR');
+            t.end();
+        });
+    });
+    t.test('html of root', (t)=>{
+        Fops(document, {onOpen}).open('/.html', flags, (err, result) => {
+            t.equal(openCount, 1, 'Should have called onOpen');
+            t.equal(result, 1, 'Should be fd==1');
+            t.equal(err, 0, 'Should return err 0');
+            t.end();
+        });
+    });
+    t.test('attribute value of root', (t)=>{
+        Fops(document, {onOpen}).open('/.attrs/lang', flags, (err, result) => {
+            t.equal(openCount, 2, 'Should have called onOpen');
+            t.equal(result, 1, 'Should be fd==1');
+            t.equal(err, 0, 'Should return err 0');
+            t.end();
+        });
+    });
+    t.test('non-existing attribute value of root', (t)=>{
+        Fops(document, {onOpen}).open('/.attrs/foo', flags, (err, result) => {
+            t.equal(openCount, 2, 'Should not have called onOpen');
+            t.equal(err, E.ENOENT, 'Should return err ENOENT');
+            t.end();
+        });
+    });
+    t.test('html of non-existing element', (t)=>{
+        Fops(document, {onOpen}).open('/foo/.html', flags, (err, result) => {
+            t.equal(openCount, 2, 'Should not have called onOpen');
+            t.equal(err, E.ENOENT, 'Should return err ENOENT');
+            t.end();
+        });
+    });
+    t.test('attribute value of non-existing element', (t)=>{
+        Fops(document, {onOpen}).open('/foo/.attrs/foo', flags, (err, result) => {
+            t.equal(openCount, 2, 'Should not have called onOpen');
+            t.equal(err, E.ENOENT, 'Should return err ENOENT');
+            t.end();
+        });
+    });
+    t.test('invalid path', (t)=>{
+        Fops(document, {onOpen}).open('/://foo', flags, (err, result) => {
+            t.equal(openCount, 2, 'Should not have called onOpen');
+            t.equal(err, E.ENOENT, 'Should return err ENOENT');
+            t.end();
+        });
+    });
+});

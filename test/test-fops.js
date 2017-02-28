@@ -66,3 +66,113 @@ test('readdir', (t)=> {
         );
     });
 });
+
+test('getattr', (t)=>{
+    let browser = new Browser();
+    browser.open('about:blank');
+    let document = browser.window.document;
+    document.write(`
+        <html lang="en" id="blah">
+            <head>
+                <title lang="de">Hello World</title>
+            </head>
+        </html>
+    `);
+    t.test('root', (t)=>{
+        Fops(document).getattr('/', (err, result) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(typeof result.mtime, 'number', "mtime should be a number");
+            t.equal(typeof result.atime, 'number', "atime should be a number");
+            t.equal(typeof result.ctime, 'number', "ctime should be a number");
+            t.equal(result.mode, 0040777, "mode should be correct");
+            t.end();
+        });
+    });
+    t.test('an element: /head', (t)=>{
+        Fops(document).getattr('/head', (err, result) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(typeof result.mtime, 'number', "mtime should be a number");
+            t.equal(typeof result.atime, 'number', "atime should be a number");
+            t.equal(typeof result.ctime, 'number', "ctime should be a number");
+            t.equal(result.mode, 0040777, "mode should be correct");
+            t.end();
+        });
+    });
+    t.test('Attributes of root: /.attrs', (t)=>{
+        Fops(document).getattr('/.attrs', (err, result) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(typeof result.mtime, 'number', "mtime should be a number");
+            t.equal(typeof result.atime, 'number', "atime should be a number");
+            t.equal(typeof result.ctime, 'number', "ctime should be a number");
+            t.equal(result.mode, 0040777, "mode should be correct");
+            t.end();
+        });
+    });
+    t.test('Attributes of nested element: /head/title/.attrs', (t)=>{
+        Fops(document).getattr('/head/title/.attrs', (err, result) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(typeof result.mtime, 'number', "mtime should be a number");
+            t.equal(typeof result.atime, 'number', "atime should be a number");
+            t.equal(typeof result.ctime, 'number', "ctime should be a number");
+            t.equal(result.mode, 0040777, "mode should be correct");
+            t.end();
+        });
+    });
+    t.test('Existing attribute value /head/title/.attrs/lang', (t)=>{
+        Fops(document).getattr('/head/title/.attrs/lang', (err, result) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(typeof result.mtime, 'number', "mtime should be a number");
+            t.equal(typeof result.atime, 'number', "atime should be a number");
+            t.equal(typeof result.ctime, 'number', "ctime should be a number");
+            t.equal(result.size, 2, 'Size should be correct');
+            t.equal(result.mode, 0100666, "mode should be correct");
+            t.end();
+        });
+    });
+    t.test('Non-existing attribute value /head/title/.attrs/foo', (t)=>{
+        Fops(document).getattr('/head/title/.attrs/foo', (err, result) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.equal(result, undefined, 'Result should be undefined');
+            t.end();
+        });
+    });
+    t.test('html of existing element: /head/title/.html', (t)=>{
+        Fops(document).getattr('/head/title/.html', (err, result) => {
+            t.equal(err, 0, 'Error should be 0');
+            t.equal(typeof result.mtime, 'number', "mtime should be a number");
+            t.equal(typeof result.atime, 'number', "atime should be a number");
+            t.equal(typeof result.ctime, 'number', "ctime should be a number");
+            t.equal(result.size, 11, 'Size should be correct');
+            t.equal(result.mode, 0100666, "mode should be correct");
+            t.end();
+        });
+    });
+    t.test('html of non-existing element: /head/foo/.html', (t)=>{
+        Fops(document).getattr('/head/foo/.html', (err, result) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.equal(result, undefined, 'Result should be undefined');
+            t.end();
+        });
+    });
+    t.test('bogus special file of existing element: /head/.foo', (t)=>{
+        Fops(document).getattr('/head/.foo', (err, result) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.equal(result, undefined, 'Result should be undefined');
+            t.end();
+        });
+    });
+    t.test('bogus special file of non-existing element: /head/foo/.bar', (t)=>{
+        Fops(document).getattr('/head/foo/.bar', (err, result) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.equal(result, undefined, 'Result should be undefined');
+            t.end();
+        });
+    });
+    t.test('invalid path: /head/:://', (t)=>{
+        Fops(document).getattr('/head/:://', (err, result) => {
+            t.equal(err, E.ENOENT, 'Error should be ENOENT');
+            t.equal(result, undefined, 'Result should be undefined');
+            t.end();
+        });
+    });
+});
